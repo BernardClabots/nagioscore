@@ -820,8 +820,9 @@ void broker_adaptive_contact_data(int type, int flags, int attr, contact *cntct,
 
 
 /* sends external commands to broker */
-void broker_external_command(int type, int flags, int attr, int command_type, time_t entry_time, char *command_string, char *command_args, struct timeval *timestamp) {
+int broker_external_command(int type, int flags, int attr, int command_type, time_t entry_time, char *command_string, char *command_args, struct timeval *timestamp) {
 	nebstruct_external_command_data ds;
+	int return_code = OK;
 
 	if(!(event_broker_options & BROKER_EXTERNALCOMMAND_DATA))
 		return;
@@ -838,9 +839,9 @@ void broker_external_command(int type, int flags, int attr, int command_type, ti
 	ds.command_args = command_args;
 
 	/* make callbacks */
-	neb_make_callbacks(NEBCALLBACK_EXTERNAL_COMMAND_DATA, (void *)&ds);
+	return_code = neb_make_callbacks(NEBCALLBACK_EXTERNAL_COMMAND_DATA, (void *)&ds);
 
-	return;
+	return return_code;
 	}
 
 
