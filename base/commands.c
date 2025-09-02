@@ -388,6 +388,9 @@ int process_external_command1(char *cmd) {
 	int command_type = CMD_NONE;
 	char *temp_ptr = NULL;
 	int external_command_ret = OK;
+#ifdef USE_EVENT_BROKER
+	int neb_result = OK;
+#endif
 
 	log_debug_info(DEBUGL_FUNCTIONS, 0, "process_external_command1()\n");
 
@@ -922,17 +925,28 @@ int process_external_command1(char *cmd) {
 
 #ifdef USE_EVENT_BROKER
 	/* send data to event broker */
-	broker_external_command(NEBTYPE_EXTERNALCOMMAND_START, NEBFLAG_NONE, NEBATTR_NONE, command_type, entry_time, command_id, args, NULL);
+	neb_result = broker_external_command(NEBTYPE_EXTERNALCOMMAND_START, NEBFLAG_NONE, NEBATTR_NONE, command_type, entry_time, command_id, args, NULL);
+
+	/* neb module wants to override (or cancel) the service check - perhaps it will check the service itself */
+	/* NOTE: if a module does this, it has to do a lot of the stuff found below to make sure things don't get whacked out of shape! */
+	if (neb_result == NEBERROR_CALLBACKCANCEL) {
+
+		log_debug_info(DEBUGL_CHECKS, 0, "External command execution '%s' (id=%u) was cancelled by a module\n", command_id, command_type);
+
+		external_command_ret = CMD_ERROR_FAILURE;
+	} else if (neb_result == NEBERROR_CALLBACKOVERRIDE) {
+
+		log_debug_info(DEBUGL_CHECKS, 0, "External command execution '%s' (id=%u) was overridden by a module\n", command_id, command_type);
+		external_command_ret = CMD_ERROR_OK;
+	} else {
 #endif
-
-	/* process the command */
-	external_command_ret = (process_external_command2(command_type, entry_time, args) == OK) ? CMD_ERROR_OK : CMD_ERROR_FAILURE;
-	if (external_command_ret != CMD_ERROR_OK) {
-			logit(NSLOG_EXTERNAL_COMMAND | NSLOG_RUNTIME_WARNING, TRUE, "Error: External command failed -> %s;%s\n", command_id, args);
-	}
-
-
+		/* process the command */
+		external_command_ret = (process_external_command2(command_type, entry_time, args) == OK) ? CMD_ERROR_OK : CMD_ERROR_FAILURE;
+		if (external_command_ret != CMD_ERROR_OK) {
+				logit(NSLOG_EXTERNAL_COMMAND | NSLOG_RUNTIME_WARNING, TRUE, "Error: External command failed -> %s;%s\n", command_id, args);
+		}
 #ifdef USE_EVENT_BROKER
+	}
 	/* send data to event broker */
 	broker_external_command(NEBTYPE_EXTERNALCOMMAND_END, NEBFLAG_NONE, NEBATTR_NONE, command_type, entry_time, command_id, args, NULL);
 #endif
